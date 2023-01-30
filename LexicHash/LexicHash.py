@@ -31,7 +31,7 @@ def find_overlaps(**args):
         MAX_K: Maximum match-length to consider for output
         RC: Whether to consider reverse-complement reads in whole pipeline (typically True)
     """
-    global sketches, MIN_K, MAX_K, RC # global variables needed for multiprocessing
+    global MIN_K, MAX_K, RC # global variables needed for multiprocessing
     MIN_K = args['min_k']
     MAX_K = args['max_k']
     RC = args['rc']
@@ -51,7 +51,7 @@ def find_overlaps(**args):
     # PAIRWISE COMPARISON
     utils.print_banner('PERFORMING PAIRWISE COMPARISON')
     start = perf_counter()
-    pair_match_lens = pairwise_comparison(n_seq, **args)
+    pair_match_lens = pairwise_comparison(sketches, n_seq, **args)
     utils.print_clocktime(start, perf_counter(), 'pairwise comparison')
     
     # WRITE RESULTS
@@ -78,10 +78,7 @@ def write_overlaps(pair_match_lens, aln_path, **args):
 #                SKETCHING                      #
 #################################################
 
-def init_worker(masks):
-    global shared_masks
-    shared_masks = masks
-
+    
 def sketching(seqs, masks, n_hash, n_cpu, **args):
     '''
     Use multiprocessing to compute the sketches for all sequences. 
@@ -93,14 +90,18 @@ def sketching(seqs, masks, n_hash, n_cpu, **args):
         n_seq: Number of sequences
     '''
     chunksize = 10
-    with Pool(processes=n_cpu, initializer=init_worker, initargs=(masks,)) as pool:
+    with Pool(processes=n_cpu, initializer=init_worker_sketching, initargs=(masks,)) as pool:
         all_sketches = pool.map(get_seq_sketch, seqs, chunksize)
     sketches, sketches_rc = list(map(list, zip(*all_sketches))) # list of two-tuples to two lists
     n_seq = len(sketches)
     sketches = np.concatenate((sketches, sketches_rc)) if RC else np.array(sketches)
     return sketches, n_seq
 
-
+def init_worker_sketching(masks):
+    global shared_masks
+    shared_masks = masks
+    
+    
 def get_seq_sketch(seq): 
     '''
     Function called by multiprocessing.
@@ -115,11 +116,11 @@ def get_seq_sketch(seq):
     '''
     seq = seq[1] # pyfastx.Fastx iters as (name,seq,comment)
     seq_int_repr = np.array([BASE_TO_INT[b] for b in seq])
-    sketch = [lexicographic_first(seq_int_repr, mask) for mask in masks]
+    sketch = [lexicographic_first(seq_int_repr, mask) for mask in shared_masks]
     if RC:
         seq_rc = seq_utils.revcomp(seq)
         seq_int_repr = np.array([BASE_TO_INT[b] for b in seq_rc])
-        sketch_rc = [lexicographic_first(seq_int_repr, mask) for mask in masks]
+        sketch_rc = [lexicographic_first(seq_int_repr, mask) for mask in shared_masks]
     else:
         sketch_rc = None
     return sketch, sketch_rc
@@ -210,7 +211,7 @@ def get_masks(n_masks):
 #            PAIRWISE COMPARISON                #
 #################################################
 
-def pairwise_comparison(n_seq, n_hash, n_cpu, alpha, **args): 
+def pairwise_comparison(sketches, n_seq, n_hash, n_cpu, alpha, **args): 
     """
     Perform the pairwise comparison component of the LexicHash pipeline.
 
@@ -224,13 +225,13 @@ def pairwise_comparison(n_seq, n_hash, n_cpu, alpha, **args):
         pair_match_lens: Dict of pair:match-length. Pair is a tuple of the form (id1,id2,+/-).
     """
     n_pairs = n_seq * alpha if alpha is not None else np.inf
-    all_matching_sets = prefix_tree_multiproc(n_hash, n_cpu)
+    all_matching_sets = prefix_tree_multiproc(sketches, n_hash, n_cpu)
 #     min_k = get_k_thresh(all_matching_sets) if min_k is None else min_k
     pair_match_lens = bottom_up_pair_aggregation(all_matching_sets, n_seq, n_pairs)
     return pair_match_lens
 
-
-def prefix_tree_multiproc(n_hash, n_cpu):
+    
+def prefix_tree_multiproc(sketches, n_hash, n_cpu):
     '''
     Use multiprocessing to compute the pairwise comparisons. 
     Each process considers a single hash function.
@@ -242,11 +243,15 @@ def prefix_tree_multiproc(n_hash, n_cpu):
     '''
     args = (i for i in range(n_hash))
     chunksize = int(np.ceil(n_hash/n_cpu/4))
-    with Pool(processes=n_cpu) as pool:
+    with Pool(processes=n_cpu, initializer=init_worker_prefix_tree, initargs=(sketches,)) as pool:
         all_matching_sets = pool.map(get_matching_sets, args, chunksize)
     return all_matching_sets
 
+def init_worker_prefix_tree(sketches):
+    global shared_sketches
+    shared_sketches = sketches
 
+    
 def get_matching_sets(sketch_idx):
     '''
     Function called by multiprocessing.
@@ -265,13 +270,13 @@ def get_matching_sets(sketch_idx):
         matching_sets: Dict of match-length: list of sets of sequence indices
             with match of corresponding length 
     '''
-    subtrees = [list(range(len(sketches)))]
+    subtrees = [list(range(len(shared_sketches)))]
     matching_sets = {}
     for k in range(MAX_K): # current position in all substrings k (i.e. match-length - 1)
         next_subtrees = []
         for seq_idxs in subtrees: 
             partition = {0:[],1:[],2:[],3:[]}
-            chars = (sketches[seq_idxs, sketch_idx] >> 2*(MAX_K-k-1)) & 3
+            chars = (shared_sketches[seq_idxs, sketch_idx] >> 2*(MAX_K-k-1)) & 3
             for char,seq_idx in zip(chars,seq_idxs):
                 partition[char].append(seq_idx)
             partition = [p for p in partition.values() if len(p)>1]
