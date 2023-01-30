@@ -31,7 +31,7 @@ def find_overlaps(**args):
         MAX_K: Maximum match-length to consider for output
         RC: Whether to consider reverse-complement reads in whole pipeline (typically True)
     """
-    global sketches, masks, MIN_K, MAX_K, RC # global variables needed for multiprocessing
+    global sketches, MIN_K, MAX_K, RC # global variables needed for multiprocessing
     MIN_K = args['min_k']
     MAX_K = args['max_k']
     RC = args['rc']
@@ -44,7 +44,7 @@ def find_overlaps(**args):
     utils.print_banner('SKETCHING READS')
     start = perf_counter()
     masks = get_masks(args['n_hash'])
-    sketches, n_seq = sketching(seqs, **args)
+    sketches, n_seq = sketching(seqs, masks, **args)
     print(f'# sequences: {n_seq}')
     utils.print_clocktime(start, perf_counter(), 'sketching')
 
@@ -78,7 +78,11 @@ def write_overlaps(pair_match_lens, aln_path, **args):
 #                SKETCHING                      #
 #################################################
 
-def sketching(seqs, n_hash, n_cpu, **args):
+def init_worker(masks):
+    global shared_masks
+    shared_masks = masks
+
+def sketching(seqs, masks, n_hash, n_cpu, **args):
     '''
     Use multiprocessing to compute the sketches for all sequences. 
     
@@ -88,8 +92,8 @@ def sketching(seqs, n_hash, n_cpu, **args):
             Includes reverse-complements unless no_rc is set
         n_seq: Number of sequences
     '''
-    chunksize = 100
-    with Pool(processes=n_cpu) as pool:
+    chunksize = 10
+    with Pool(processes=n_cpu, initializer=init_worker, initargs=(masks,)) as pool:
         all_sketches = pool.map(get_seq_sketch, seqs, chunksize)
     sketches, sketches_rc = list(map(list, zip(*all_sketches))) # list of two-tuples to two lists
     n_seq = len(sketches)

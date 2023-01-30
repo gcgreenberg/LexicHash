@@ -84,12 +84,13 @@ def sketching(seqs, n_hash, sketch_path=None, **args):
             Each column corresponds to a single hash function
         sketches_rc: Sketches of reverse-complement reads
     '''
-    chunksize = int(np.ceil(len(seqs)/cpu_count()/4))
+    chunksize = 100
     with Pool() as pool:
         all_sketches = pool.map(get_seq_sketch, seqs, chunksize)
     
     sketches, sketches_rc, seq_lens = list(map(list, zip(*all_sketches))) # list of two-tuples to two lists
     sketches, sketches_rc = np.array(sketches), np.array(sketches_rc) if RC else None
+    seq_lens = np.array(seq_lens)
     return sketches, sketches_rc, seq_lens
 
 
