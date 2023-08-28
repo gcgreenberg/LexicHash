@@ -90,7 +90,7 @@ def sketching(seqs, masks, n_hash, n_cpu, rc, max_k, min_k, **args):
         all_sketches = pool.map(get_seq_sketch, seqs, chunksize)
     sketches, sketches_rc = list(map(list, zip(*all_sketches))) # list of two-tuples to two lists
     n_seq = len(sketches)
-    sketches = np.concatenate((sketches, sketches_rc)) if rc else np.array(sketches)
+    sketches = np.concatenate((sketches, sketches_rc), dtype='object') if rc else np.array(sketches, dtype='object')
     return sketches, n_seq
 
 
@@ -179,13 +179,13 @@ def lexicographic_first(seq,mask):
     def hash_val(lex_first_idx):
         val = 0
         for b in seq[lex_first_idx:lex_first_idx+MAX_K]:
-            val <<= 2
-            val += b
+            val *= 4 # 2 bits per base, and it's 2 bases
+            val += b.item()
         base_extend = max(0, MAX_K-(len(seq)-lex_first_idx))
         if base_extend > 0: # used if substring is at end of sequence (corner case)
             for b in mask[-base_extend:]:
-                val <<= 2 # 2 bits per base
-                val += b ^ 3 # extend with lexicographically last rank
+                val *= 4 # 2 bits per base
+                val += b.item() ^ 3 # extend with lexicographically last rank
         return val
 
     candidate_locs, n_matching = get_candidate_locs() # n_matching is length exactly matching the mask

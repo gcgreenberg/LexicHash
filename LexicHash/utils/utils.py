@@ -29,7 +29,7 @@ def save_file(filepath, x):
     np.save(filepath, x, allow_pickle=True)
     
 def get_run_id(method, n_hash, k=None, **args):
-    run_id = f'{"sh" if method=="lexichash" else "mh"}'
+    run_id = f'{"lh" if method=="lexichash" else "mh"}'
     run_id += f'_{n_hash}h'
     if method == 'minhash':
         run_id += f'_{k}k'
