@@ -90,8 +90,12 @@ def sketching(seqs, masks, n_hash, n_cpu, rc, max_k, min_k, **args):
         all_sketches = pool.map(get_seq_sketch, seqs, chunksize)
     sketches, sketches_rc = list(map(list, zip(*all_sketches))) # list of two-tuples to two lists
     n_seq = len(sketches)
-    sketches = np.array(sketches, dtype=np.uint64)
-    if rc: sketches = np.concatenate((sketches, np.array(sketches_rc,dtype=np.uint64)))
+    if max_k <= 32:
+        sketches = np.array(sketches, dtype=np.uint64)
+        if rc: sketches = np.concatenate((sketches, np.array(sketches_rc,dtype=np.uint64)))
+    else:
+        sketches = np.array(sketches, dtype='object')
+        if rc: sketches = np.concatenate((sketches, np.array(sketches_rc, dtype='object')))
     return sketches, n_seq
 
 
@@ -249,10 +253,15 @@ def prefix_tree_multiproc(sketches, n_hash, n_cpu, max_k, min_k):
 
 
 def init_worker_prefix_tree(sketches, max_k, min_k):
-    global shared_sketches, MAX_K, MIN_K, RC
+    global shared_sketches, MAX_K, MIN_K, RC, get_chars
     shared_sketches = sketches
     MAX_K = max_k
     MIN_K = min_k
+    if max_k <= 32:
+        get_chars = lambda x,k: (x >> 2*(MAX_K-k-1)) & 3
+    else:
+        and3_ = lambda y: int(y)&3
+        get_chars = lambda x,k: map(and3_, x // 4**(MAX_K-k-1))
 
     
 def get_matching_sets(sketch_idx):
@@ -280,7 +289,7 @@ def get_matching_sets(sketch_idx):
         for seq_idxs in subtrees: 
             partition = {0:[],1:[],2:[],3:[]}
 #             print(shared_sketches[seq_idxs, sketch_idx], 2*(MAX_K-k-1))
-            chars = (shared_sketches[seq_idxs, sketch_idx] >> 2*(MAX_K-k-1)) & 3
+            chars = get_chars(shared_sketches[seq_idxs, sketch_idx], k)
             for char,seq_idx in zip(chars,seq_idxs):
                 partition[char].append(seq_idx)
             partition = [p for p in partition.values() if len(p)>1]
