@@ -29,8 +29,8 @@ def get_gt_df_nctc(gt_path, seq_lens, min_theta=0.3):
 def get_thetas(gt_df, seq_lens):
     thetas = []
     ovlps = gt_df['overlap'].values
-    i1s = gt_df['i1'].to_numpy()
-    i2s = gt_df['i2'].to_numpy()
+    i1s = gt_df['i1'].to_numpy(dtype=int)
+    i2s = gt_df['i2'].to_numpy(dtype=int)
     tot_lens = seq_lens[i1s] + seq_lens[i2s]
     thetas = ovlps / (tot_lens - ovlps)
     return np.array(thetas)

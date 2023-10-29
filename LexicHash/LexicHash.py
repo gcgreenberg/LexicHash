@@ -90,7 +90,8 @@ def sketching(seqs, masks, n_hash, n_cpu, rc, max_k, min_k, **args):
         all_sketches = pool.map(get_seq_sketch, seqs, chunksize)
     sketches, sketches_rc = list(map(list, zip(*all_sketches))) # list of two-tuples to two lists
     n_seq = len(sketches)
-    sketches = np.concatenate((sketches, sketches_rc), dtype='object') if rc else np.array(sketches, dtype='object')
+    sketches = np.array(sketches, dtype=np.uint64)
+    if rc: sketches = np.concatenate((sketches, np.array(sketches_rc,dtype=np.uint64)))
     return sketches, n_seq
 
 
@@ -186,7 +187,7 @@ def lexicographic_first(seq,mask):
             for b in mask[-base_extend:]:
                 val *= 4 # 2 bits per base
                 val += b.item() ^ 3 # extend with lexicographically last rank
-        return val
+        return int(val)
 
     candidate_locs, n_matching = get_candidate_locs() # n_matching is length exactly matching the mask
     lex_first_idx = extend_candidates(candidate_locs, n_matching)
@@ -278,6 +279,7 @@ def get_matching_sets(sketch_idx):
         next_subtrees = []
         for seq_idxs in subtrees: 
             partition = {0:[],1:[],2:[],3:[]}
+#             print(shared_sketches[seq_idxs, sketch_idx], 2*(MAX_K-k-1))
             chars = (shared_sketches[seq_idxs, sketch_idx] >> 2*(MAX_K-k-1)) & 3
             for char,seq_idx in zip(chars,seq_idxs):
                 partition[char].append(seq_idx)
