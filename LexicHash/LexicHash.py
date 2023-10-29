@@ -67,7 +67,7 @@ def write_overlaps(pair_match_lens, aln_path, **args):
     with open(aln_path, 'w') as fh:
         for pair,match_len in pair_match_lens.items():
             id1,id2,is_rc = pair
-            line = '\t'.join([str(id1), str(id2), str(match_len), is_rc])
+            line = '\t'.join([str(id1+1), str(id2+1), str(match_len), is_rc]) # 1 indexed
             fh.write(line+'\n')
                 
 #################################################
