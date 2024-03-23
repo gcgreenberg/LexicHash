@@ -75,7 +75,7 @@ def write_overlaps(pair_aln_scores, aln_path, **args):
 #                SKETCHING                      #
 #################################################
 
-def sketching(seqs, hash_funcs, n_hash, k, n_cpu, sketch_path=None, **args):
+def sketching(seqs, hash_funcs, n_hash, k, n_cpu, rc, sketch_path=None, **args):
     '''
     Use multiprocessing to compute the sketches for all sequences. 
     
