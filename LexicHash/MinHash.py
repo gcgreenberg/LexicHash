@@ -47,7 +47,7 @@ def find_overlaps(**args):
     # PAIRWISE COMPARISON
     utils.print_banner('PERFORMING PAIRWISE COMPARISON')
     start = perf_counter()
-    pair_aln_scores = pairwise_comparison(sketches, seq_lens, n_seq, **args)
+    pair_aln_scores = pairwise_comparison(sketches, sketches_rc, seq_lens, n_seq, **args)
     utils.print_clocktime(start, perf_counter(), 'pairwise comparison')
     
     # WRITE RESULTS
@@ -112,10 +112,10 @@ def get_seq_sketch(seq):
         sketch_rc: Sketch of reverse-complement read
     '''
     seq = seq[1] # pyfastx.Fastx sequence is tuple (name,seq,comment)
-    sketch = [min(h(seq)) for h in hash_funcs]
+    sketch = [min(h(seq)) for h in shared_hash_funcs]
     if RC:
         seq_rc = seq_utils.revcomp(seq)
-        sketch_rc = [min(h(seq_rc)) for h in hash_funcs]
+        sketch_rc = [min(h(seq_rc)) for h in shared_hash_funcs]
         return sketch, sketch_rc, len(seq)
     return sketch, None, len(seq)
         
@@ -163,7 +163,7 @@ class random_hash_func():
 #            PAIRWISE COMPARISON                #
 #################################################
 
-def pairwise_comparison(sketches, seq_lens, n_seq, n_hash, k, min_n_col, n_cpu, **args):
+def pairwise_comparison(sketches, sketches_rc, seq_lens, n_seq, n_hash, k, min_n_col, n_cpu, **args):
     """
     Perform the pairwise comparison component of the MinHash pipeline.
 
@@ -174,22 +174,23 @@ def pairwise_comparison(sketches, seq_lens, n_seq, n_hash, k, min_n_col, n_cpu, 
     Returns:
         pair_aln_scores: Dict of pair:similarity score. Pair is a tuple of the form (id1,id2,+/-).
     """
-    all_matching_sets = hash_table_multiproc(sketches, k, n_hash)
+    all_matching_sets = hash_table_multiproc(sketches, sketches_rc, k, n_hash)
     pair_aln_scores = process_matching_sets(all_matching_sets, seq_lens, n_hash, min_n_col)
     return pair_aln_scores
 
 
-def hash_table_multiproc(sketches, k, n_hash):
+def hash_table_multiproc(sketches, sketches_rc, k, n_hash):
     args = (i for i in range(n_hash))
     chunksize = int(np.ceil(n_hash/cpu_count()/4))
-    with Pool(processes=n_cpu, initializer=init_worker_hash_table, initargs=(sketches,k)) as pool:
+    with Pool(processes=n_cpu, initializer=init_worker_hash_table, initargs=(sketches,sketches_rc,k)) as pool:
         all_matching_sets = pool.map(get_matching_sets, args, chunksize)
     all_matching_sets = np.concatenate(all_matching_sets)
     return all_matching_sets    
 
 def init_worker_hash_table(sketches,k):
-    global shared_sketches, K
+    global shared_sketches, shared_sketches_rc, K
     shared_sketches = sketches
+    shared_sketches_rc = sketches_rc
     K = k
 
 def get_matching_sets(sketch_idx):
@@ -207,7 +208,7 @@ def get_matching_sets(sketch_idx):
     '''
     matching_sets = {}
     for i in range(2*n_seq if RC else n_seq):
-        val = sketches[i,sketch_idx] if i<n_seq else sketches_rc[i%n_seq,sketch_idx]
+        val = shared_sketches[i,sketch_idx] if i<n_seq else shared_sketches_rc[i%n_seq,sketch_idx]
         if val in matching_sets:
             matching_sets[val].add(i)
         else:
