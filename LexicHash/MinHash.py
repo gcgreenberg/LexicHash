@@ -182,7 +182,7 @@ def pairwise_comparison(sketches, seq_lens, n_seq, n_hash, k, min_n_col, n_cpu, 
 def hash_table_multiproc(sketches, k, n_hash):
     args = (i for i in range(n_hash))
     chunksize = int(np.ceil(n_hash/cpu_count()/4))
-    with Pool(processes=n_cpu, initializer=init_worker_hash_table, initargs=(sketches,k) as pool:
+    with Pool(processes=n_cpu, initializer=init_worker_hash_table, initargs=(sketches,k)) as pool:
         all_matching_sets = pool.map(get_matching_sets, args, chunksize)
     all_matching_sets = np.concatenate(all_matching_sets)
     return all_matching_sets    
