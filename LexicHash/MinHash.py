@@ -175,7 +175,7 @@ def pairwise_comparison(sketches, sketches_rc, seq_lens, n_seq, n_hash, k, min_n
         pair_aln_scores: Dict of pair:similarity score. Pair is a tuple of the form (id1,id2,+/-).
     """
     all_matching_sets = hash_table_multiproc(sketches, sketches_rc, k, rc, n_hash, n_cpu)
-    pair_aln_scores = process_matching_sets(all_matching_sets, seq_lens, n_hash, min_n_col)
+    pair_aln_scores = process_matching_sets(all_matching_sets, seq_lens, n_hash, rc, min_n_col)
     return pair_aln_scores
 
 
@@ -218,7 +218,7 @@ def get_matching_sets(sketch_idx):
     return matching_sets 
 
 
-def process_matching_sets(all_matching_sets, seq_lens, n_hash, min_n_col):
+def process_matching_sets(all_matching_sets, seq_lens, n_hash, rc, min_n_col):
     ''' 
     Processes the output of the multiprocessing step.
     
@@ -229,7 +229,7 @@ def process_matching_sets(all_matching_sets, seq_lens, n_hash, min_n_col):
         
     '''
     def index_matching_sets():
-        seq_idxs = range(2*n_seq if RC else n_seq) # will either be {1,...,n_seq} or {1,...,2*n_seq}
+        seq_idxs = range(2*n_seq if rc else n_seq) # will either be {1,...,n_seq} or {1,...,2*n_seq}
         seq_to_set_idxs = {i:set() for i in seq_idxs}
         for j,s in enumerate(all_matching_sets):
             for i in s:
