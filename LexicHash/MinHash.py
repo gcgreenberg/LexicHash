@@ -187,7 +187,7 @@ def hash_table_multiproc(sketches, sketches_rc, k, n_hash, n_cpu):
     all_matching_sets = np.concatenate(all_matching_sets)
     return all_matching_sets    
 
-def init_worker_hash_table(sketches,k):
+def init_worker_hash_table(sketches,sketches_rc,k):
     global shared_sketches, shared_sketches_rc, K
     shared_sketches = sketches
     shared_sketches_rc = sketches_rc
