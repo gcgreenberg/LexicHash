@@ -29,8 +29,8 @@ def find_overlaps(**args):
         n_seq: Number of sequencing reads
         RC: Whether to consider reverse-complement reads in whole pipeline (typically True)
     """
-    global sketches, sketches_rc, hash_funcs, n_seq, RC
-    RC = args['rc']
+    # global sketches, sketches_rc, hash_funcs, n_seq, RC
+    # RC = args['rc']
     start_program = perf_counter()
     
     # OBTAIN READS
@@ -40,14 +40,14 @@ def find_overlaps(**args):
     utils.print_banner('SKETCHING READS')
     start = perf_counter()
     hash_funcs = get_hash_funcs(**args)
-    sketches, sketches_rc, seq_lens = sketching(seqs, **args)
+    sketches, sketches_rc, seq_lens = sketching(seqs, hash_funcs, **args)
     n_seq = len(sketches)
     utils.print_clocktime(start, perf_counter(), 'sketching')
     
     # PAIRWISE COMPARISON
     utils.print_banner('PERFORMING PAIRWISE COMPARISON')
     start = perf_counter()
-    pair_aln_scores = pairwise_comparison(seq_lens, **args)
+    pair_aln_scores = pairwise_comparison(sketches, seq_lens, n_seq, **args)
     utils.print_clocktime(start, perf_counter(), 'pairwise comparison')
     
     # WRITE RESULTS
@@ -75,7 +75,7 @@ def write_overlaps(pair_aln_scores, aln_path, **args):
 #                SKETCHING                      #
 #################################################
 
-def sketching(seqs, n_hash, sketch_path=None, **args):
+def sketching(seqs, hash_funcs, n_hash, k, n_cpu, sketch_path=None, **args):
     '''
     Use multiprocessing to compute the sketches for all sequences. 
     
@@ -85,7 +85,7 @@ def sketching(seqs, n_hash, sketch_path=None, **args):
         sketches_rc: Sketches of reverse-complement reads
     '''
     chunksize = 100
-    with Pool() as pool:
+    with Pool(processes=n_cpu, initializer=init_worker_sketching, initargs=(hash_funcs, rc, k) as pool:
         all_sketches = pool.map(get_seq_sketch, seqs, chunksize)
     
     sketches, sketches_rc, seq_lens = list(map(list, zip(*all_sketches))) # list of two-tuples to two lists
@@ -93,6 +93,11 @@ def sketching(seqs, n_hash, sketch_path=None, **args):
     seq_lens = np.array(seq_lens)
     return sketches, sketches_rc, seq_lens
 
+def init_worker_sketching(hash_funcs, rc, k):
+    global shared_hash_funcs, RC, K
+    shared_hash_funcs = hash_funcs
+    RC = rc
+    K = k
 
 def get_seq_sketch(seq):
     '''
@@ -158,7 +163,7 @@ class random_hash_func():
 #            PAIRWISE COMPARISON                #
 #################################################
 
-def pairwise_comparison(seq_lens, n_hash, min_n_col, **args):
+def pairwise_comparison(sketches, seq_lens, n_seq, n_hash, k, min_n_col, n_cpu, **args):
     """
     Perform the pairwise comparison component of the MinHash pipeline.
 
@@ -169,19 +174,23 @@ def pairwise_comparison(seq_lens, n_hash, min_n_col, **args):
     Returns:
         pair_aln_scores: Dict of pair:similarity score. Pair is a tuple of the form (id1,id2,+/-).
     """
-    all_matching_sets = hash_table_multiproc(n_hash)
+    all_matching_sets = hash_table_multiproc(sketches, k, n_hash)
     pair_aln_scores = process_matching_sets(all_matching_sets, seq_lens, n_hash, min_n_col)
     return pair_aln_scores
 
 
-def hash_table_multiproc(n_hash):
+def hash_table_multiproc(sketches, k, n_hash):
     args = (i for i in range(n_hash))
     chunksize = int(np.ceil(n_hash/cpu_count()/4))
-    with Pool() as pool:
+    with Pool(processes=n_cpu, initializer=init_worker_hash_table, initargs=(sketches,k) as pool:
         all_matching_sets = pool.map(get_matching_sets, args, chunksize)
     all_matching_sets = np.concatenate(all_matching_sets)
-    return all_matching_sets
-    
+    return all_matching_sets    
+
+def init_worker_hash_table(sketches,k):
+    global shared_sketches, K
+    shared_sketches = sketches
+    K = k
 
 def get_matching_sets(sketch_idx):
     '''
