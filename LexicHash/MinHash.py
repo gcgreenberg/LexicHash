@@ -85,7 +85,7 @@ def sketching(seqs, hash_funcs, n_hash, k, n_cpu, sketch_path=None, **args):
         sketches_rc: Sketches of reverse-complement reads
     '''
     chunksize = 100
-    with Pool(processes=n_cpu, initializer=init_worker_sketching, initargs=(hash_funcs, rc, k) as pool:
+    with Pool(processes=n_cpu, initializer=init_worker_sketching, initargs=(hash_funcs, rc, k)) as pool:
         all_sketches = pool.map(get_seq_sketch, seqs, chunksize)
     
     sketches, sketches_rc, seq_lens = list(map(list, zip(*all_sketches))) # list of two-tuples to two lists
