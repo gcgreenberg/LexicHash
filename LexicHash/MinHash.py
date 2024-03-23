@@ -174,25 +174,26 @@ def pairwise_comparison(sketches, sketches_rc, seq_lens, n_seq, n_hash, k, min_n
     Returns:
         pair_aln_scores: Dict of pair:similarity score. Pair is a tuple of the form (id1,id2,+/-).
     """
-    all_matching_sets = hash_table_multiproc(sketches, sketches_rc, k, rc, n_hash, n_cpu)
-    pair_aln_scores = process_matching_sets(all_matching_sets, seq_lens, n_hash, rc, min_n_col)
+    all_matching_sets = hash_table_multiproc(sketches, sketches_rc, n_seq, k, rc, n_hash, n_cpu)
+    pair_aln_scores = process_matching_sets(all_matching_sets, n_seq, seq_lens, n_hash, rc, min_n_col)
     return pair_aln_scores
 
 
-def hash_table_multiproc(sketches, sketches_rc, k, rc, n_hash, n_cpu):
+def hash_table_multiproc(sketches, sketches_rc, n_seq, k, rc, n_hash, n_cpu):
     args = (i for i in range(n_hash))
     chunksize = int(np.ceil(n_hash/cpu_count()/4))
-    with Pool(processes=n_cpu, initializer=init_worker_hash_table, initargs=(sketches,sketches_rc,k, rc)) as pool:
+    with Pool(processes=n_cpu, initializer=init_worker_hash_table, initargs=(sketches,sketches_rc,k, rc, n_seq)) as pool:
         all_matching_sets = pool.map(get_matching_sets, args, chunksize)
     all_matching_sets = np.concatenate(all_matching_sets)
     return all_matching_sets    
 
-def init_worker_hash_table(sketches,sketches_rc,k,rc):
-    global shared_sketches, shared_sketches_rc, K, RC
+def init_worker_hash_table(sketches,sketches_rc,k,rc,n_seq):
+    global shared_sketches, shared_sketches_rc, K, RC,N_SEQ
     shared_sketches = sketches
     shared_sketches_rc = sketches_rc
     K = k
     RC = rc
+    N_SEQ
 
 def get_matching_sets(sketch_idx):
     '''
@@ -208,8 +209,8 @@ def get_matching_sets(sketch_idx):
         matching_sets: Dict of similarity score:list of sets of sequence indices with same minhash-value. 
     '''
     matching_sets = {}
-    for i in range(2*n_seq if RC else n_seq):
-        val = shared_sketches[i,sketch_idx] if i<n_seq else shared_sketches_rc[i%n_seq,sketch_idx]
+    for i in range(2*N_SEQ if RC else N_SEQ):
+        val = shared_sketches[i,sketch_idx] if i<N_SEQ else shared_sketches_rc[i%N_SEQ,sketch_idx]
         if val in matching_sets:
             matching_sets[val].add(i)
         else:
@@ -218,7 +219,7 @@ def get_matching_sets(sketch_idx):
     return matching_sets 
 
 
-def process_matching_sets(all_matching_sets, seq_lens, n_hash, rc, min_n_col):
+def process_matching_sets(all_matching_sets, n_seq, seq_lens, n_hash, rc, min_n_col):
     ''' 
     Processes the output of the multiprocessing step.
     
