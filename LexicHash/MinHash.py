@@ -174,12 +174,12 @@ def pairwise_comparison(sketches, sketches_rc, seq_lens, n_seq, n_hash, k, min_n
     Returns:
         pair_aln_scores: Dict of pair:similarity score. Pair is a tuple of the form (id1,id2,+/-).
     """
-    all_matching_sets = hash_table_multiproc(sketches, sketches_rc, k, n_hash)
+    all_matching_sets = hash_table_multiproc(sketches, sketches_rc, k, n_hash, n_cpu)
     pair_aln_scores = process_matching_sets(all_matching_sets, seq_lens, n_hash, min_n_col)
     return pair_aln_scores
 
 
-def hash_table_multiproc(sketches, sketches_rc, k, n_hash):
+def hash_table_multiproc(sketches, sketches_rc, k, n_hash, n_cpu):
     args = (i for i in range(n_hash))
     chunksize = int(np.ceil(n_hash/cpu_count()/4))
     with Pool(processes=n_cpu, initializer=init_worker_hash_table, initargs=(sketches,sketches_rc,k)) as pool:
