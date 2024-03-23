@@ -89,7 +89,7 @@ def sketching(seqs, hash_funcs, n_hash, k, n_cpu, rc, sketch_path=None, **args):
         all_sketches = pool.map(get_seq_sketch, seqs, chunksize)
     
     sketches, sketches_rc, seq_lens = list(map(list, zip(*all_sketches))) # list of two-tuples to two lists
-    sketches, sketches_rc = np.array(sketches), np.array(sketches_rc) if RC else None
+    sketches, sketches_rc = np.array(sketches), np.array(sketches_rc) if rc else None
     seq_lens = np.array(seq_lens)
     return sketches, sketches_rc, seq_lens
 
