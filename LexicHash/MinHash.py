@@ -193,7 +193,7 @@ def init_worker_hash_table(sketches,sketches_rc,k,rc,n_seq):
     shared_sketches_rc = sketches_rc
     K = k
     RC = rc
-    N_SEQ
+    N_SEQ = n_seq
 
 def get_matching_sets(sketch_idx):
     '''
